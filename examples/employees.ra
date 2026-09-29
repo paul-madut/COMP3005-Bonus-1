@@ -1,0 +1,6 @@
+// employees and their departments (assignment Section 4.1)
+Employees (EID, Name, Age, DID) = {
+  E1, John, 32, D1
+  E2, Alice, 28, D2
+  E3, Bob, 29, D1
+}
