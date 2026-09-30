@@ -16,7 +16,7 @@ default-groups = ["dev", "report"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "bench"]
 
 [tool.ruff]
 target-version = "py312"

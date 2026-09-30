@@ -1,0 +1,14 @@
+n=  1000  join   0.5455s  select   0.0010s  project   0.0013s  (out=961)
+n=  2000  join   2.2830s  select   0.0019s  project   0.0024s  (out=1975)
+n=  4000  join   7.4763s  select   0.0037s  project   0.0048s  (out=3995)
+n=  8000  join  30.3663s  select   0.0073s  project   0.0095s  (out=8057)
+n= 16000  join 118.7466s  select   0.0151s  project   0.0193s  (out=16294)
+n= 32000  join 483.9691s  select   0.0305s  project   0.0431s  (out=31969)
+n= 64000  join 1973.6253s  select   0.0639s  project   0.0884s  (out=64033)
+k=    0  join  31.8628s  out=0  comparisons=64000000
+k=    1  join  30.6512s  out=8057  comparisons=64000000
+k=   10  join  32.3764s  out=79891  comparisons=64000000
+k=  100  join  30.9830s  out=801090  comparisons=64000000
+k= 1000  join  34.2299s  out=8003710  comparisons=64000000
+Q6 @ n=64000: nested 1973.6253s (4096000000 comparisons), hash 0.1445s (128033 comparisons, out=64033)
+wrote bench/results_new.csv

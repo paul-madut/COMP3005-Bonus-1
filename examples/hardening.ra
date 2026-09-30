@@ -1,0 +1,16 @@
+// relations used by the hardening tests
+R (a, b) = {
+  1, 'x'
+  2, 'y'
+}
+
+S (a, b) = {
+  3, 'z'
+}
+
+Empty (a, b) = {
+}
+
+union (x) = {
+  1
+}
