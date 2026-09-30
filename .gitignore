@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Generated benchmark data (regenerate with bench/gen.py; results CSVs are committed)
+bench/data/
+
+# Local tooling
+.freebuff/
+.DS_Store
