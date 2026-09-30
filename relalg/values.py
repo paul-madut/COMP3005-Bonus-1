@@ -96,3 +96,16 @@ def values_equal(left: Value, right: Value) -> bool:
 def tuple_key(t: tuple[Value, ...]) -> TupleKey:
     """A hashable key for a whole tuple, used for dedup and set operations."""
     return tuple((type(v).__name__, v) if isinstance(v, str) else v for v in t)
+
+
+def format_value(v: Value) -> str:
+    """Render a value in this language's own syntax, never Python's.
+
+    Strings are single-quoted with `''` for an embedded quote, so output can be
+    pasted back into a relation file.  Numbers print as written: `repr` would
+    turn a Decimal into `Decimal('1.5')` and leak the implementation into error
+    messages and result tables.
+    """
+    if isinstance(v, str):
+        return "'" + v.replace("'", "''") + "'"
+    return str(v)

@@ -316,3 +316,26 @@ def test_nested_loop_comparisons_are_exactly_n_times_m(n: int, m: int) -> None:
     assert join.label == "join"
     assert join.comparisons == n * m, f"expected {n * m} comparisons, got {join.comparisons}"
     assert emitted == min(n, m)  # matches vary; the comparison count does not
+
+
+def test_values_render_in_this_language_not_python() -> None:
+    """Output and error messages must never leak Python's repr.
+
+    `repr` renders a Decimal as `Decimal('1.5')` and switches to double quotes
+    for a string containing a quote, so both are formatted explicitly instead.
+    """
+    from relalg.values import format_value
+
+    assert format_value(Decimal("1.5")) == "1.5"
+    assert format_value(30) == "30"
+    # Strings round-trip into the relation-file syntax of section 4.1.
+    assert format_value("O'Brien") == "'O''Brien'"
+    assert format_value("has, comma") == "'has, comma'"
+
+
+def test_decimal_literal_in_a_type_error_reads_as_written() -> None:
+    c = make_catalog("N (s) = {\n  hello\n}")
+    with pytest.raises(RATypeError) as e:
+        run(c, "select[s>1.5](N)")
+    assert "1.5" in str(e.value)
+    assert "Decimal" not in str(e.value)
