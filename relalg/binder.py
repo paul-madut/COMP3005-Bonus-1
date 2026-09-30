@@ -16,7 +16,7 @@ from .catalog import Catalog
 from .errors import NameError, SchemaError, Span
 from .errors import TypeError as RATypeError
 from .schema import Attribute, Schema, concat, union_compatible
-from .values import Type, Value, compare, compatible
+from .values import Type, Value, compare, compatible, format_value
 
 # A compiled predicate takes a row (tuple of Values) and answers a condition.
 Predicate = Callable[[tuple[Value, ...]], bool]
@@ -166,7 +166,7 @@ def _equi_keys(
 
 def _describe(op: nodes.Operand) -> str:
     if isinstance(op, nodes.Literal):
-        return repr(op.value)
+        return format_value(op.value)
     return f"{op.qualifier}.{op.name}" if op.qualifier else op.name
 
 

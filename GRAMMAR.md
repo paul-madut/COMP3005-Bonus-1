@@ -178,25 +178,39 @@ Expr ::= Expr "union" Expr
 Because the naive `Expr ::= Expr op Expr` accepts both splittings, `A union B minus C`
 has two parse trees:
 
+Tree 1, grouping `(A union B) minus C`:
+
 ```
-      minus                     union
-      /    \                    /    \
-   union    C                  A    minus
-   /   \                         /    \
-  A     B                       B      C
+      minus
+    /       \
+  union     C
+  /   \
+  A   B
 ```
 
-The left tree groups `(A union B) minus C`; the right one groups
-`A union (B minus C)`. The grammar alone cannot choose.
+Tree 2, grouping `A union (B minus C)`:
+
+```
+      union
+    /       \
+    A     minus
+          /   \
+          B   C
+```
+
+Both are derivations of the same input under the naive grammar, which has no rule
+preferring either: `Expr ::= Expr "union" Expr` can match with `Expr "minus" Expr` on
+the left or on the right. That is precisely what it means for a grammar to be
+ambiguous.
 (* Both trees above are hand-drawn: they are what the naive grammar *could*
-produce. The implemented parser can only produce the left one - see 3.4. *)
+produce. The implemented parser can only produce tree 1 - see 3.4. *)
 
 ### 3.3 A data instance where the trees disagree
 
 Let `A = {1}`, `B = {2}`, `C = {1}` (attribute `x` everywhere).
 
-- Left tree: `(A union B) minus C = {1,2} - {1} = {2}`.
-- Right tree: `A union (B minus C) = {1} ∪ ({2} - {1}) = {1,2}`.
+- Tree 1: `(A union B) minus C = {1,2} - {1} = {2}`.
+- Tree 2: `A union (B minus C) = {1} ∪ ({2} - {1}) = {1,2}`.
 
 `{2} ≠ {1,2}`, so the parse trees have different meanings and a parser that produced
 either silently would compute a different algebra than the one the reader intended.
@@ -223,8 +237,8 @@ minus
 └─ C
 ```
 
-The right-hand tree of 3.2 is unreachable: there is no production that could
-attach `minus C` under `B`.
+Tree 2 of 3.2 is unreachable: there is no production that could attach `minus C`
+under `B`.
 
 ### 3.5 Associativity of `A minus B minus C` (test case 11)
 

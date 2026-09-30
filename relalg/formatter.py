@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from .schema import Schema
-from .values import Value
+from .values import Value, format_value
 
 
 def format_table(schema: Schema, rows: list[tuple[Value, ...]]) -> str:
     """Render a relation as an aligned text table with a header row."""
     headers = schema.display()
-    cells = [[repr(v) if isinstance(v, str) else str(v) for v in row] for row in rows]
+    cells = [[format_value(v) for v in row] for row in rows]
     widths = [
         max(len(headers[i]), *(len(r[i]) for r in cells)) if cells else len(headers[i])
         for i in range(len(headers))

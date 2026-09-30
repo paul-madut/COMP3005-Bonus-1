@@ -114,6 +114,13 @@ Not supported (see Known limitations): aggregation, sorting, outer/semi/anti joi
   from position with at most two tokens of lookahead.
 - **Set semantics throughout.** Relations are insertion-ordered sets keyed by an
   explicit `tuple_key()`; projection dedups, so `project[b](R)` is a set (decision 12).
+- **A repeated projection attribute is an error** (case 24). `project[Name, Name](R)`
+  reports a schema error, "duplicate output attribute", rather than emitting the column
+  twice or silently collapsing it to one. The reason is that every other operator relies
+  on a schema in which a qualified name identifies exactly one attribute: allowing
+  `Name` twice would make `R.Name` ambiguous in any later `select` or `join` over the
+  result. Erasing the duplicate instead would silently return a different arity than
+  the query asked for, so the error is the honest option.
 - **Fused nested loop join** (decision 11): the condition is evaluated on the pair and
   the concatenation is built only on a match - the cross product is never materialized.
   An equi-join is detected at bind time and the benchmark can switch to a hash join.
