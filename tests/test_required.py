@@ -276,3 +276,18 @@ def test_case_25() -> None:
     out = format_table(schema_of(Binder(c).bind(parse("select[Age>999](Employees)"))), [])
     assert "(0 tuples)" in out
     assert "Employees.EID" in out and "Employees.Age" in out
+
+
+def test_case_10_example_file_shows_the_grouping_difference() -> None:
+    """examples/case10.ra is the data instance GRAMMAR.md section 3.3 cites.
+
+    The demo is only convincing if the two groupings really disagree on it, so
+    the file is checked rather than trusted.
+    """
+    from pathlib import Path
+
+    c = Catalog()
+    c.load(Path("examples/case10.ra").read_text(encoding="utf-8"))
+    assert run(c, "A union B minus C") == [(2,)]
+    assert run(c, "(A union B) minus C") == [(2,)]
+    assert run(c, "A union (B minus C)") == [(1,), (2,)]
