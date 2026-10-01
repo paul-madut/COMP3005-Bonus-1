@@ -1,0 +1,20 @@
+// Test case 10 / 11: the data instance where the two groupings disagree.
+// GRAMMAR.md section 3.3 uses exactly these relations.
+//
+//   A union B minus C   parses as (A union B) minus C  ->  {2}
+//   A union (B minus C) would give                         {1,2}
+//
+// Run all three to see the grouping change the answer:
+//   ra.py --db examples/case10.ra "A union B minus C"
+//   ra.py --db examples/case10.ra "(A union B) minus C"
+//   ra.py --db examples/case10.ra "A union (B minus C)"
+
+A (x) = {
+  1
+}
+B (x) = {
+  2
+}
+C (x) = {
+  1
+}
