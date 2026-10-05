@@ -74,3 +74,31 @@ Details fade fast, so capture the exact prompt, output and evidence while it is 
   and added the mixed equi/theta case to the probe. Lesson recorded: a second strategy
   for an existing operator needs its own equivalence test against the first.
 - Copied into DESIGN_LOG.md: yes
+
+### 2026-10-05 - assert claimed the parser rejects two-literal comparisons
+- Phase / file: Phase 5 binder work, relalg/binder.py `_comparison` (found as defect D1
+  of the pre-PR correctness audit)
+- What I asked: implement the comparison predicate for the binder (static type checking
+  of both operands before execution).
+- What it gave me: a fall-through `raise AssertionError("comparison with two literals is
+  rejected by the parser")` when both operands are literals - a claim about the parser
+  that was never true: GRAMMAR.md 1.5 has `catom ::= "(" cond ")" | operand compop
+  operand` with `operand ::= WORD ["." WORD] | STRING | NUMBER`, so `select[1=1](R)`
+  parses fine.
+- Why it was wrong / slow / incomplete: a grammatical query died as an internal error
+  instead of one of the five categories, and the fuzzer's answer-or-RAError property
+  was false for it - `select[1=1](R)` is one `char` mutation (a -> 1) of the seed
+  `select[a=1](R)` in the fuzzer's own corpus, so the fixed seed and iteration count
+  were the only reason the suite stayed green.
+- How I found out: the audit read the binder's final `raise` next to the GRAMMAR.md
+  operand rule, then ran the fuzzer's exact pipeline on `select[1=1](R)` and got
+  `ESCAPES fuzzer property: AssertionError` (the CLI separately printed
+  `internal error: AssertionError`, exit 1).
+- What I did instead: raise a positioned `RAError` ("comparison of two literals (...):
+  at least one side must be an attribute") *after* the compatibility check so
+  `1<'a'` keeps its Type error; added `test_two_literal_comparison_is_answer_or_raerror`
+  running the fuzzer's property on that input and put `select[1=1](R)` into the CLI
+  no-traceback cases. Lesson: an assert whose message blames another component is a
+  claim about that component - check it against that component's spec, and exercise a
+  fuzzer property with inputs hand-built to target its known blind spot.
+- Copied into DESIGN_LOG.md: yes
