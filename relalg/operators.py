@@ -219,8 +219,10 @@ def _pull_hash_join(
 ) -> Iterator[Row]:
     """Equi-join strategy (Q6): build a hash table on S's keys, probe with R.
 
-    O(n+m) hash operations instead of n*m comparisons.  Output order differs
-    from the nested loop, so --stats labels the strategy.
+    O(n+m) hash operations instead of n*m comparisons.  The emission order is
+    the same as the nested loop's (left rows in order, matches in right
+    insertion order), so the strategy is invisible in the output; --stats
+    labels it anyway.
     """
     keys = node.equi_keys or ()
     l_arity = len(schema_of(node.left).attrs)

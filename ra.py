@@ -11,16 +11,13 @@ from relalg.catalog import Catalog
 from relalg.errors import RAError
 from relalg.executor import execute, render_stats
 from relalg.formatter import format_table
+from relalg.nodes import Query
 from relalg.parser import parse
 from relalg.tree_printer import print_tree
 
 
-def _run_query(catalog: Catalog, text: str, tree: bool, stats: bool) -> None:
-    """Parse, bind, and run one query; print the result table."""
-    query = parse(text)
-    if tree:
-        print(print_tree(query.expr))
-        return
+def _execute(catalog: Catalog, query: Query, stats: bool) -> None:
+    """Bind and run one parsed query, printing its result table."""
     plan = Binder(catalog).bind(query)
     schema, rows, st = execute(plan)
     out = format_table(schema, list(rows))
@@ -28,6 +25,15 @@ def _run_query(catalog: Catalog, text: str, tree: bool, stats: bool) -> None:
     if stats:
         print()
         print(render_stats(st))
+
+
+def _run_query(catalog: Catalog, text: str, tree: bool, stats: bool) -> None:
+    """Parse a query, then print its tree or execute it."""
+    query = parse(text)
+    if tree:
+        print(print_tree(query.expr))
+        return
+    _execute(catalog, query, stats)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -66,6 +72,16 @@ def _main(argv: list[str] | None = None) -> int:
         except RAError as e:
             print(e.render(text), file=sys.stderr)
             return 1
+        # Decision 14: a `;`-terminated query in the file runs and prints its
+        # result, like a statement in a script.  `--tree` means "don't run",
+        # so file queries are skipped there too.
+        if not args.tree:
+            try:
+                for st in catalog.queries:
+                    _execute(catalog, st.query, args.stats)
+            except RAError as e:
+                print(e.render(text), file=sys.stderr)
+                return 1
 
     if args.query is not None:
         try:

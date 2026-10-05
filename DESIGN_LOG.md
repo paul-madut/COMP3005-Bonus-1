@@ -145,3 +145,47 @@ decision 2 and required cases 10 and 11 from source rather than from browser beh
 Logged in notes/AI_WRONG.md as a follow-up; the lesson is to enumerate the tree before
 concluding a file does not exist.
 **Next:** Nothing in code. Rehearse the oral check and record the video.
+
+## 2026-10-05
+
+**Goal:** Pre-PR correctness audit: verify relalg/ against decisions 11-15 and the 25
+required cases, then fix whatever the audit could substantiate and leave the tree green.
+**Tried:** Evidence-first audit - read the parser, operators, values, lexer and binder
+against the decisions table and probed the CLI instead of trusting the green suite.
+Decision 11's fused loop with no dedup on join output, 12's single `tuple_key`, 13's
+Volcano generators with rows_in/rows_out/comparisons/time, 14's `;`-terminated
+statements and 15's line-start-only `//` comments all checked out, as did the LL(2)
+keyword rules; spot-checked `--tree` blocks in GRAMMAR.md matched live output, and the
+25 required cases assert real token streams, tree shapes, exact answers and error
+positions rather than weakened categories. Three defects did not check out, each fixed
+with a regression test (commit a2e492c): the binder's fall-through assert on
+two-literal comparisons became a positioned RAError raised *after* the type check (so
+`1<'a'` keeps its truthful Type error); file queries now run through bind+execute and
+print before any command-line query, skipped under `--tree`, with errors rendered
+against the file source; and the binder now sets `strategy="hash"` whenever
+`_equi_keys` finds cross-side equality conjuncts, while the runner pins the strategy
+per question so Q1-Q5 still measure the fused loop. The differential tests now force
+both sides and compare output exactly, and README's strategy section was reconciled
+with the new default (plus its stale hardcoded test count replaced with a count-free
+phrasing). Four checks green after every edit: 144 tests, ruff, ruff format, mypy.
+**What broke:** The three defects the audit read. (D1) `select[1=1](R)` parses per
+GRAMMAR 1.5, but the binder fell through to `AssertionError("rejected by the parser")`
+and the CLI printed an internal error - the fuzzer's answer-or-RAError property was
+false for it, and `select[1=1](R)` is a single character mutation of its own seed
+`select[a=1](R)`, so the fixed corpus was one lucky draw away from failing. Proved by
+running the fuzzer's exact pipeline on the input, which printed `ESCAPES fuzzer
+property: AssertionError`. (D2) `catalog.queries` was write-only: a `;` query in a
+--db file parsed and silently did nothing, although README showed exactly that file as
+the example. (D3) plan Q6 said "use a hash join" but only the benchmark could select
+one; worse, flipping the default would have silently broken the experiment (Q1's
+`comparisons == n*n` assert) until the runner pinned both directions. Mid-pass check
+failures were also fixed at cause, not suppressed: a misplaced `@parametrize` decorator
+broke collection, mypy needed an `isinstance` narrowing around `dataclasses.replace`
+on the `BoundNode` union, one test file needed `ruff format`.
+**AI was wrong (if any):** An earlier session wrote the D1 assert whose message claims
+the parser rejects two-literal comparisons - GRAMMAR.md's operand rule accepts them
+(notes/AI_WRONG.md, "assert claimed the parser rejects two-literal comparisons"). And
+the hash join docstring claimed its output order differs from the nested loop's;
+probing all nine differential shapes showed the orders are identical, so the
+multiset-only comparison that protected that claim was upgraded to exact list equality.
+**Next:** Push and open the PR; the oral check and the video remain (human-only).

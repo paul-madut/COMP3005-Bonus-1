@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from . import nodes
 from .catalog import Catalog
-from .errors import NameError, SchemaError, Span
+from .errors import NameError, RAError, SchemaError, Span
 from .errors import TypeError as RATypeError
 from .schema import Attribute, Schema, concat, union_compatible
 from .values import Type, Value, compare, compatible, format_value
@@ -91,8 +91,9 @@ class BoundJoin:
     span: Span
     # Equi-join keys (left index, right index) when every conjunct of the
     # condition is `left-attr = right-attr`.  None for a pure theta join.
-    # The default plan is the fused nested loop (decision 11); the hash join
-    # is an alternative strategy the benchmark can select (plan Q6).
+    # The binder sets `hash` when keys are found (plan Q6: detected equi-joins
+    # use the hash join); a plan rewrite can still force `nested` - the
+    # benchmark's Q1-Q5 baseline and the decision-11 fused loop.
     equi_keys: tuple[tuple[int, int], ...] | None = None
     strategy: str = "nested"
 
@@ -220,7 +221,15 @@ class Binder:
                 schema = concat(left_schema, schema_of(right), node.span)
                 cond = self._cond(node.cond, schema)
                 keys = _equi_keys(node.cond, schema, len(left_schema.attrs))
-                return BoundJoin(cond, left, right, node.span, keys)
+                # Q6: use the hash join whenever equality keys were detected.
+                return BoundJoin(
+                    cond,
+                    left,
+                    right,
+                    node.span,
+                    keys,
+                    strategy="hash" if keys else "nested",
+                )
         raise AssertionError(f"unreachable expression node {node!r}")
 
     def _relation(self, node: nodes.Relation) -> BoundRelation:
@@ -310,6 +319,16 @@ class Binder:
                 node.span,
             )
 
+        if li is None and ri is None:
+            # GRAMMAR 1.5 makes `operand compop operand` with two literals
+            # parse, but a comparison of two constants filters no attribute,
+            # so it is rejected here, at bind time, as an ordinary user error.
+            raise RAError(
+                f"comparison of two literals ({_describe(left)} {node.op} "
+                f"{_describe(right)}): at least one side must be an attribute",
+                node.span,
+            )
+
         op, span = node.op, node.span
 
         if li is not None and ri is not None:
@@ -337,4 +356,4 @@ class Binder:
 
             return lit_vs_col
 
-        raise AssertionError("comparison with two literals is rejected by the parser")
+        raise AssertionError("unreachable: two literals are rejected above")

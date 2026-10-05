@@ -64,7 +64,41 @@ CLI_CASES = [
     "'unterminated",  # lexical error
     "select[a!1](R)",  # bad bang
     "project[](R)",  # empty list
+    "select[1=1](R)",  # two literals: grammatical, rejected at bind time
 ]
+
+
+def test_file_query_runs_but_not_under_tree(tmp_path: Path) -> None:
+    """Decision 14: a `;`-terminated query in a `--db` file executes and
+    prints, before any command-line query; `--tree` means nothing runs."""
+    db = tmp_path / "queries.ra"
+    db.write_text(
+        "R (a, b) = {\n  1, 'x'\n  2, 'y'\n}\nproject[a](select[a=2](R));\n",
+        encoding="utf-8",
+    )
+    proc = subprocess.run(
+        [sys.executable, "ra.py", "--db", str(db), "select[a=1](R)"],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).parent.parent,
+    )
+    assert proc.returncode == 0, proc.stderr
+    # The file's single-column table comes first, the CLI query's after it.
+    assert " R.a \n" in proc.stdout  # header of project[a](...)
+    assert " 2   " in proc.stdout  # its one row
+    assert "R.a | R.b" in proc.stdout  # the command-line query's header
+    assert proc.stdout.index(" R.a \n") < proc.stdout.index("R.a | R.b")
+
+    # --tree: "print the parse tree, don't run" - the file query stays silent.
+    proc = subprocess.run(
+        [sys.executable, "ra.py", "--db", str(db), "--tree", "R"],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).parent.parent,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert " R.a \n" not in proc.stdout
+    assert " 2   " not in proc.stdout
 
 
 @pytest.mark.parametrize("query", CLI_CASES)
@@ -193,6 +227,22 @@ def test_fuzzer_lexical_never_other_exception() -> None:
             continue
         except Exception as e:  # noqa: BLE001
             pytest.fail(f"lexer raised {type(e).__name__} on {text!r}")
+
+
+def test_two_literal_comparison_is_answer_or_raerror() -> None:
+    """`select[1=1](R)` parses - GRAMMAR 1.5 allows literals as operands - so
+    the binder must reject it with an RAError, never an AssertionError.  This
+    is the input the fuzzer's answer-or-RAError property was one character
+    mutation away from generating, and it used to escape as an internal error."""
+    c = Catalog()
+    c.load(DB)
+    for text in ("select[1=1](R)", "select['a'<'b'](R)", "select[1=1 or a=1](R)"):
+        try:
+            plan = Binder(c).bind(parse(text))
+            list(execute(plan)[1])
+        except RAError:
+            continue
+        pytest.fail(f"{text} must be rejected with an RAError")
 
 
 # -- the plan's edge cases -----------------------------------------------------------

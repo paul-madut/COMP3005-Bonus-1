@@ -7,11 +7,12 @@ must hold for arbitrary generated relations, not just the examples.
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
 
-from relalg.binder import Binder
+from relalg.binder import Binder, BoundJoin
 from relalg.catalog import Catalog
 from relalg.errors import NameError as RANameError
 from relalg.errors import SchemaError as RASchemaError
@@ -310,7 +311,11 @@ def test_nested_loop_comparisons_are_exactly_n_times_m(n: int, m: int) -> None:
         + "\n".join(f"  {i}" for i in range(m))
         + "\n}"
     )
-    _, rows, stats = execute(Binder(c).bind(parse("L join[L.a=Rt.b] Rt")))
+    plan = Binder(c).bind(parse("L join[L.a=Rt.b] Rt"))
+    # Q1 pins the *nested* loop's contract (decision 11); the binder sends a
+    # detected equi-join to the hash strategy, so force the baseline back here.
+    assert isinstance(plan, BoundJoin)
+    _, rows, stats = execute(replace(plan, strategy="nested"))
     emitted = len(list(rows))
     join = stats.children[0]
     assert join.label == "join"
