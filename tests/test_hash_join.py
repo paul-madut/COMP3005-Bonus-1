@@ -4,14 +4,15 @@ The hash strategy (Q6) is a second implementation of an operator that already
 works, and when it was wrong it returned plausible rows from the wrong buckets
 rather than raising (notes/AI_WRONG.md, "hash join keyed on the wrong
 coordinates"). Each case below runs one query under both strategies and compares
-the results as multisets; row order is not compared, because the hash join emits
-by bucket by design.
+the results exactly, order included: both strategies emit left rows in order
+with matches in right insertion order, so a strategy switch must be invisible
+in the output.
 """
 
 from __future__ import annotations
 
 import pytest
-from run_experiment import _switch_to_hash
+from run_experiment import _switch_strategy
 
 from relalg.binder import Binder, BoundJoin, BoundNode
 from relalg.catalog import Catalog
@@ -65,10 +66,15 @@ def run(plan: BoundNode) -> tuple[list[Row], int]:
 
 
 def both_ways(query: str) -> tuple[list[Row], list[Row], int, int]:
-    """Run `query` nested and hashed; return (nested_rows, hash_rows, n_cmp, h_cmp)."""
+    """Run `query` nested and hashed; return (nested_rows, hash_rows, n_cmp, h_cmp).
+
+    The binder defaults a detected equi-join to the hash strategy, so the
+    nested side has to be forced back explicitly for the comparison to stay
+    differential.
+    """
     cat = catalog()
-    nested_rows, n_cmp = run(Binder(cat).bind(parse(query)))
-    hash_rows, h_cmp = run(_switch_to_hash(Binder(cat).bind(parse(query))))
+    nested_rows, n_cmp = run(_switch_strategy(Binder(cat).bind(parse(query)), "nested"))
+    hash_rows, h_cmp = run(_switch_strategy(Binder(cat).bind(parse(query)), "hash"))
     return nested_rows, hash_rows, n_cmp, h_cmp
 
 
@@ -98,7 +104,7 @@ EQUIVALENT_QUERIES = [
 @pytest.mark.parametrize("query", EQUIVALENT_QUERIES)
 def test_hash_join_matches_nested_loop(query: str) -> None:
     nested_rows, hash_rows, _, _ = both_ways(query)
-    assert sorted(map(repr, nested_rows)) == sorted(map(repr, hash_rows)), (
+    assert nested_rows == hash_rows, (
         f"strategies disagree on {query!r}:\n  nested={nested_rows}\n  hash={hash_rows}"
     )
 
@@ -106,7 +112,7 @@ def test_hash_join_matches_nested_loop(query: str) -> None:
 def test_hash_join_actually_switched_and_costs_less() -> None:
     """Guard against every case above passing because the plan stayed nested."""
     query = "R join[R.b=S.b] S"
-    hash_plan = _switch_to_hash(Binder(catalog()).bind(parse(query)))
+    hash_plan = _switch_strategy(Binder(catalog()).bind(parse(query)), "hash")
     assert isinstance(hash_plan, BoundJoin)
     assert hash_plan.strategy == "hash"
 
@@ -117,7 +123,20 @@ def test_hash_join_actually_switched_and_costs_less() -> None:
 
 def test_pure_theta_join_has_no_equi_keys() -> None:
     """With no equality conjunct there is nothing to hash on, so it stays nested."""
-    plan = _switch_to_hash(Binder(catalog()).bind(parse("R join[R.a<S.b] S")))
+    plan = _switch_strategy(Binder(catalog()).bind(parse("R join[R.a<S.b] S")), "hash")
     assert isinstance(plan, BoundJoin)
     assert plan.equi_keys is None
     assert plan.strategy == "nested"
+
+
+def test_equi_join_defaults_to_hash_and_matches_nested() -> None:
+    """Plan Q6: a detected equi-join *uses* the hash strategy by default, and
+    the default plan returns exactly what the nested baseline returns."""
+    query = "R join[R.b=S.b] S"
+    plan = Binder(catalog()).bind(parse(query))
+    assert isinstance(plan, BoundJoin)
+    assert plan.strategy == "hash"
+    default_rows, default_cmp = run(plan)
+    nested_rows, nested_cmp = run(_switch_strategy(plan, "nested"))
+    assert default_rows == nested_rows
+    assert default_cmp < nested_cmp

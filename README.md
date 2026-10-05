@@ -7,7 +7,7 @@ It is the first component of a larger DBMS.
 
 All ten phases of PLAN.md are complete: grammar, lexer, parser, binder, operators, CLI,
 hardening suite, benchmark harness, the reconciled GRAMMAR.md and the finished REPORT.md.
-All 150 tests pass (including the 25 required cases), and ruff, `ruff format` and strict
+All tests pass (including the 25 required cases), and ruff, `ruff format` and strict
 mypy are clean.
 See PLAN.md for the phased plan.
 
@@ -121,9 +121,14 @@ Not supported (see Known limitations): aggregation, sorting, outer/semi/anti joi
   `Name` twice would make `R.Name` ambiguous in any later `select` or `join` over the
   result. Erasing the duplicate instead would silently return a different arity than
   the query asked for, so the error is the honest option.
-- **Fused nested loop join** (decision 11): the condition is evaluated on the pair and
-  the concatenation is built only on a match - the cross product is never materialized.
-  An equi-join is detected at bind time and the benchmark can switch to a hash join.
+- **Join strategy** (decision 11, plan Q6): the fused nested loop evaluates the
+  condition on the pair and emits a row only on a match - the cross product is never
+  materialized. The binder picks the algorithm at bind time: a join with at least one
+  cross-side equality conjunct runs through the hash join (O(n + m); any extra θ
+  conditions filter the candidates), while a pure θ-join runs through the fused nested
+  loop. The benchmark pins the strategy per question - Q1-Q5 force the nested
+  baseline, Q6 forces the hash side - so the report compares two explicit choices,
+  and `--stats` labels whichever ran (`join` vs `join (hash)`).
 - **Volcano iterators.** Each operator is a Python generator with its own stats object
   (rows in, rows out, comparisons, time), printed by `--stats`.
 

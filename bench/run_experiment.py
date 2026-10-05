@@ -62,10 +62,10 @@ def build_catalog(n: int, m: int, k: int, seed: int) -> Catalog:
 def timed_run(catalog: Catalog, query: str, hash_join: bool = False) -> tuple[float, int, int]:
     """Execute once; return (seconds, rows_out, comparisons)."""
     plan = Binder(catalog).bind(parse(query))
-    if hash_join:
-        # Walk the plan and flip every join to the hash strategy (Q6).
-        plan = _switch_to_hash(plan)
-    assert plan is not None
+    # The binder sends detected equi-joins to the hash strategy (Q6), so the
+    # nested-loop baseline of Q1-Q5 must be pinned explicitly - in both
+    # directions the plan rewrite is what selects the algorithm under test.
+    plan = _switch_strategy(plan, "hash" if hash_join else "nested")
     gc_was_on = gc.isenabled()
     gc.disable()
     t0 = time.perf_counter_ns()
@@ -82,17 +82,20 @@ def timed_run(catalog: Catalog, query: str, hash_join: bool = False) -> tuple[fl
     return elapsed / 1e9, n_out, count_comparisons(stats)
 
 
-def _switch_to_hash(node: BoundNode) -> BoundNode:
-    """Rebuild the plan bottom-up, switching every equi-join to hash (Q6)."""
+def _switch_strategy(node: BoundNode, strategy: str) -> BoundNode:
+    """Rebuild the plan bottom-up, forcing every equi-join onto `strategy`.
+
+    Joins without equi keys are left alone: there is nothing to switch.
+    """
     if isinstance(node, BoundJoin) and node.equi_keys:
-        node = dataclasses_replace(node, strategy="hash")
+        node = dataclasses_replace(node, strategy=strategy)
     if isinstance(node, (BoundSelect, BoundProject, BoundRename)):
-        return dataclasses_replace(node, input=_switch_to_hash(node.input))
+        return dataclasses_replace(node, input=_switch_strategy(node.input, strategy))
     if isinstance(node, (BoundUnion, BoundMinus, BoundIntersect, BoundTimes, BoundJoin)):
         return dataclasses_replace(
             node,
-            left=_switch_to_hash(node.left),
-            right=_switch_to_hash(node.right),
+            left=_switch_strategy(node.left, strategy),
+            right=_switch_strategy(node.right, strategy),
         )
     return node
 
